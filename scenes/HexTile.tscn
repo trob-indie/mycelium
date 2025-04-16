@@ -1,0 +1,21 @@
+[gd_scene load_steps=4 format=3 uid="uid://c7siqoi8hgyjo"]
+
+[ext_resource type="Script" path="res://scripts/HexTile.gd" id="1_3ohre"]
+[ext_resource type="Texture2D" uid="uid://ckny1u6478hpu" path="res://sprites/hex.png" id="2_sf6v4"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_l35nd"]
+
+[node name="HexTile" type="Area2D"]
+script = ExtResource("1_3ohre")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+scale = Vector2(0.09, 0.09)
+texture = ExtResource("2_sf6v4")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+scale = Vector2(3.09846, -3.00031)
+shape = SubResource("CircleShape2D_l35nd")
+
+[connection signal="input_event" from="." to="." method="_on_input_event"]
+[connection signal="mouse_entered" from="." to="." method="_on_mouse_entered"]
+[connection signal="mouse_exited" from="." to="." method="_on_mouse_exited"]

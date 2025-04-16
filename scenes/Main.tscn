@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3 uid="uid://7g7gbdgj2y7u"]
+
+[ext_resource type="Script" path="res://scripts/Main.gd" id="1_djgit"]
+[ext_resource type="PackedScene" uid="uid://c7siqoi8hgyjo" path="res://scenes/HexTile.tscn" id="2_x7134"]
+
+[node name="Root" type="Node2D"]
+z_as_relative = false
+y_sort_enabled = true
+script = ExtResource("1_djgit")
+hex_tile_scene = ExtResource("2_x7134")
+
+[node name="Camera2D" type="Camera2D" parent="."]
