@@ -1,0 +1,15 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3 uid="uid://vurapw3i7pkj"]
+
+[ext_resource type="Shader" path="res://shaders/Mycelium.gdshader" id="1_o6ul8"]
+
+[resource]
+shader = ExtResource("1_o6ul8")
+shader_parameter/time_speed = 0.4
+shader_parameter/web_density = 14.0
+shader_parameter/pulse_speed = 2.0
+shader_parameter/glow_strength = 0.5
+shader_parameter/base_color = Color(0.443137, 0.443137, 0.443137, 0.870588)
+shader_parameter/web_color = Vector4(1, 0.4, 0.4, 1)
+shader_parameter/pulse_color = Vector4(1, 0.2, 0.2, 1)
+shader_parameter/is_hovered = false
+shader_parameter/is_selected = false
