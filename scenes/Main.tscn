@@ -1,16 +1,39 @@
-[gd_scene load_steps=5 format=3 uid="uid://7g7gbdgj2y7u"]
+[gd_scene load_steps=8 format=3 uid="uid://7g7gbdgj2y7u"]
 
 [ext_resource type="Script" path="res://scripts/Main.gd" id="1_djgit"]
 [ext_resource type="PackedScene" uid="uid://c7siqoi8hgyjo" path="res://scenes/HexTile.tscn" id="2_x7134"]
 [ext_resource type="PackedScene" uid="uid://byoriyr6ef4d4" path="res://scenes/Mushroom.tscn" id="3_f6ps5"]
 [ext_resource type="PackedScene" uid="uid://dct65tcl38yp0" path="res://scenes/BaseTree.tscn" id="4_q6lmt"]
+[ext_resource type="Script" path="res://scripts/UI.gd" id="5_45e07"]
+[ext_resource type="Script" path="res://scripts/TurnManager.gd" id="6_iyce8"]
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_h7ht4"]
+load_path = "res://.godot/imported/spore.png-0d39c732c6d42f829a118fc4031404e3.ctex"
 
 [node name="Root" type="Node2D"]
 z_as_relative = false
-y_sort_enabled = true
 script = ExtResource("1_djgit")
 hex_tile_scene = ExtResource("2_x7134")
 mushroom_scene = ExtResource("3_f6ps5")
 base_tree_scene = ExtResource("4_q6lmt")
 
 [node name="Camera2D" type="Camera2D" parent="."]
+
+[node name="EntityLayer" type="Node2D" parent="."]
+y_sort_enabled = true
+
+[node name="UI" type="CanvasLayer" parent="."]
+script = ExtResource("5_45e07")
+spore_texture = SubResource("CompressedTexture2D_h7ht4")
+
+[node name="SporeContainer" type="HBoxContainer" parent="UI"]
+offset_right = 40.0
+offset_bottom = 40.0
+theme_override_constants/separation = 6
+
+[node name="TurnManager" type="Node2D" parent="."]
+script = ExtResource("6_iyce8")
+game_root = NodePath("..")
+spore_ui_path = NodePath("../UI")
+entity_layer_path = NodePath("../EntityLayer")
+mushroom_scene = ExtResource("3_f6ps5")

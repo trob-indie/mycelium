@@ -4,6 +4,10 @@ extends Node2D
 @export var mushroom_scene: PackedScene
 @export var base_tree_scene: PackedScene
 
+@onready var entity_layer = $EntityLayer
+@onready var spore_ui = $UI
+@onready var turn_manager = $TurnManager
+
 var hex_size = 32.0
 var grid_radius = 5
 var grid = {}
@@ -105,9 +109,9 @@ func _place_base_tree(q: int, r: int) -> void:
 
 	var tree = base_tree_scene.instantiate()
 	tree.position = pos
-	tree.z_index = int(pos.y) + 100  # Ensure it draws on top
+	# Let Y-sorting handle draw order — no z_index needed
 
-	add_child(tree)
+	entity_layer.add_child(tree)  # ✅ Add to Y-sorted node
 
 # Widen the path by laying tiles perpendicular to the current step dir
 func _thicken_path(q: int, r: int, dir: Vector2, thickness: int, visited: Dictionary) -> void:
@@ -124,14 +128,15 @@ func _place_tile(q: int, r: int, visited: Dictionary) -> void:
 	var key := Vector2(q, r)
 	if visited.has(key):
 		return
-	var hex  := Hex.new(q, r)
-	var pos  := hex.axial_to_isometric(q, r, hex_size)
-	var tile := hex_tile_scene.instantiate()
+	var hex = Hex.new(q, r)
+	var pos = hex.axial_to_isometric(q, r, hex_size)
+	var tile = hex_tile_scene.instantiate()
 	tile.position = pos
 	tile.q = q
 	tile.r = r
-	tile.z_index = int(tile.position.y)    # depth‑correct draw order
-	add_child(tile)
+
+	entity_layer.add_child(tile)  # ✅ Add to Y-sorted layer
+
 	grid[key] = tile
 	visited[key] = true
 
@@ -181,30 +186,25 @@ func _input(event):
 			if is_valid:
 				tile.set_selected(true)
 				selected_tile = tile
-
-				var mushroom = mushroom_scene.instantiate()
-				mushroom.name = "Mushroom"
-				mushroom.position = Vector2.ZERO
-				mushroom.z_index = tile.z_index + 1
-				tile.add_child(mushroom)
+				
+				on_tile_clicked(tile)
 			else:
 				if tile.has_method("flash_invalid"):
 					tile.flash_invalid()
 
 func _get_topmost_tile_at_pos(pos: Vector2) -> Node:
-	var top_tile = null
-	var top_z := -INF
-
+	var top_tile: Node = null
+	var top_y := INF  # lower y means it's visually on top
+	
 	for tile in grid.values():
-		var tile_pos = tile.get_global_position()
-		var dist = tile_pos.distance_to(pos)
-
-		if dist < hex_size * 1.5:  # Loosen this to 1.5x for now
-			if tile.z_index > top_z:
-				top_tile = tile
-				top_z = tile.z_index
-				
-
+		var poly = tile.get_node_or_null("CollisionPolygon2D")
+		if poly and poly.polygon.size() > 2:
+			var local_mouse = tile.to_local(pos)
+			if Geometry2D.is_point_in_polygon(local_mouse, poly.polygon):
+				# Pick tile closest to screen (lowest y)
+				if tile.global_position.y < top_y:
+					top_tile = tile
+					top_y = tile.position.y
 	return top_tile
 
 func _get_tile_at_pos(pos: Vector2):
@@ -215,16 +215,26 @@ func _get_tile_at_pos(pos: Vector2):
 	return null
 
 func on_tile_clicked(tile):
+	if turn_manager.has_method("current_turn") and turn_manager.current_turn != turn_manager.Turn.PLAYER:
+		return
 	_unselect_all()
 	tile.set_selected(true)
 	selected_tile = tile
-
+	
 	# Avoid placing duplicates: check for children
-	if tile.get_node_or_null("Mushroom") == null:
-		var mushroom = mushroom_scene.instantiate()
-		mushroom.name = "Mushroom"
-		mushroom.position = Vector2.ZERO  # center relative to tile
-		tile.add_child(mushroom)
+	if tile.get_node_or_null("Mushroom") == null \
+			and tile.has_mycelium \
+			and not tile.is_enemy_mycelium:
+		if spore_ui.has_spores():
+			spore_ui.use_spore()
+			var mushroom = mushroom_scene.instantiate()
+			mushroom.name = "Mushroom"
+			mushroom.position = tile.get_global_position() + Vector2(0, 1)
+			entity_layer.add_child(mushroom)
+			if not spore_ui.has_spores():
+				turn_manager.start_enemy_turn()
+		else:
+			tile.flash_invalid()
 
 var dragging = false
 var last_mouse_pos = Vector2.ZERO
