@@ -1,11 +1,17 @@
-[gd_scene load_steps=8 format=3 uid="uid://7g7gbdgj2y7u"]
+[gd_scene load_steps=14 format=3 uid="uid://7g7gbdgj2y7u"]
 
 [ext_resource type="Script" path="res://scripts/Main.gd" id="1_djgit"]
 [ext_resource type="PackedScene" uid="uid://c7siqoi8hgyjo" path="res://scenes/HexTile.tscn" id="2_x7134"]
-[ext_resource type="PackedScene" uid="uid://byoriyr6ef4d4" path="res://scenes/Mushroom.tscn" id="3_f6ps5"]
+[ext_resource type="PackedScene" uid="uid://byoriyr6ef4d4" path="res://scenes/BasicMushroom.tscn" id="3_f6ps5"]
 [ext_resource type="PackedScene" uid="uid://dct65tcl38yp0" path="res://scenes/BaseTree.tscn" id="4_q6lmt"]
 [ext_resource type="Script" path="res://scripts/UI.gd" id="5_45e07"]
+[ext_resource type="Script" path="res://scripts/MushroomSelector.gd" id="6_7m56t"]
 [ext_resource type="Script" path="res://scripts/TurnManager.gd" id="6_iyce8"]
+[ext_resource type="PackedScene" uid="uid://bwls3tkm7wt77" path="res://scenes/CordycepsMushroom.tscn" id="7_dgmgk"]
+[ext_resource type="PackedScene" uid="uid://calyb7v0mkcs6" path="res://scenes/TrumpetMushroom.tscn" id="7_l8prl"]
+[ext_resource type="Texture2D" uid="uid://dynym68ak31q3" path="res://sprites/mushroom-1.png" id="9_hacd2"]
+[ext_resource type="Texture2D" uid="uid://dbf1tbha4r12e" path="res://sprites/trumpet-mushroom.png" id="10_ncpk0"]
+[ext_resource type="Texture2D" uid="uid://brqtsu635m6vd" path="res://sprites/cordyceps-mushroom.png" id="11_wvs0d"]
 
 [sub_resource type="CompressedTexture2D" id="CompressedTexture2D_h7ht4"]
 load_path = "res://.godot/imported/spore.png-0d39c732c6d42f829a118fc4031404e3.ctex"
@@ -14,7 +20,6 @@ load_path = "res://.godot/imported/spore.png-0d39c732c6d42f829a118fc4031404e3.ct
 z_as_relative = false
 script = ExtResource("1_djgit")
 hex_tile_scene = ExtResource("2_x7134")
-mushroom_scene = ExtResource("3_f6ps5")
 base_tree_scene = ExtResource("4_q6lmt")
 
 [node name="Camera2D" type="Camera2D" parent="."]
@@ -31,9 +36,38 @@ offset_right = 40.0
 offset_bottom = 40.0
 theme_override_constants/separation = 6
 
-[node name="TurnManager" type="Node2D" parent="."]
+[node name="MushroomSelector" type="HBoxContainer" parent="UI"]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -112.0
+offset_top = -72.0
+offset_right = 112.0
+grow_horizontal = 2
+grow_vertical = 0
+script = ExtResource("6_7m56t")
+basic_mushroom_scene = ExtResource("3_f6ps5")
+trumpet_mushroom_scene = ExtResource("7_l8prl")
+cordyceps_mushroom_scene = ExtResource("7_dgmgk")
+
+[node name="BasicButton" type="Button" parent="UI/MushroomSelector"]
+layout_mode = 2
+icon = ExtResource("9_hacd2")
+
+[node name="TrumpetButton" type="Button" parent="UI/MushroomSelector"]
+layout_mode = 2
+icon = ExtResource("10_ncpk0")
+
+[node name="CordycepsButton" type="Button" parent="UI/MushroomSelector"]
+layout_mode = 2
+icon = ExtResource("11_wvs0d")
+
+[node name="TurnManager" type="Node2D" parent="." node_paths=PackedStringArray("main")]
 script = ExtResource("6_iyce8")
 game_root = NodePath("..")
 spore_ui_path = NodePath("../UI")
 entity_layer_path = NodePath("../EntityLayer")
 mushroom_scene = ExtResource("3_f6ps5")
+main = NodePath("..")

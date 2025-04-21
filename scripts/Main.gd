@@ -1,7 +1,7 @@
 extends Node2D
 
 @export var hex_tile_scene: PackedScene
-@export var mushroom_scene: PackedScene
+@export var current_mushroom_scene: PackedScene
 @export var base_tree_scene: PackedScene
 
 @onready var entity_layer = $EntityLayer
@@ -110,8 +110,13 @@ func _place_base_tree(q: int, r: int) -> void:
 	var tree = base_tree_scene.instantiate()
 	tree.position = pos
 	# Let Y-sorting handle draw order — no z_index needed
-
+	
 	entity_layer.add_child(tree)  # ✅ Add to Y-sorted node
+	
+	# ✅ Mark the tile with a tree
+	var key = Vector2(q, r)
+	if grid.has(key):
+		grid[key].is_occupied = true
 
 # Widen the path by laying tiles perpendicular to the current step dir
 func _thicken_path(q: int, r: int, dir: Vector2, thickness: int, visited: Dictionary) -> void:
@@ -177,16 +182,26 @@ func _input(event):
 		if tile:
 			_unselect_all()
 
-			var is_valid = (
-				tile.get_node_or_null("Mushroom") == null
-				and tile.has_mycelium
-				and not tile.is_enemy_mycelium
-			)
+			var mushroom = current_mushroom_scene.instantiate()
+
+			var is_valid = false
+
+			if mushroom.is_front_lines:
+				# Cordyceps can only be placed on dual-claimed tiles
+				is_valid = tile.is_dual_mycelium and not tile.is_occupied
+			else:
+				# Normal mushrooms: only on friendly, non-occupied, non-dual tiles
+				is_valid = (
+					tile.get_node_or_null("Mushroom") == null
+					and tile.has_mycelium
+					and not tile.is_enemy_mycelium
+					and not tile.is_dual_mycelium
+					and not tile.is_occupied
+				)
 
 			if is_valid:
 				tile.set_selected(true)
 				selected_tile = tile
-				
 				on_tile_clicked(tile)
 			else:
 				if tile.has_method("flash_invalid"):
@@ -217,24 +232,48 @@ func _get_tile_at_pos(pos: Vector2):
 func on_tile_clicked(tile):
 	if turn_manager.has_method("current_turn") and turn_manager.current_turn != turn_manager.Turn.PLAYER:
 		return
+
 	_unselect_all()
 	tile.set_selected(true)
 	selected_tile = tile
-	
-	# Avoid placing duplicates: check for children
-	if tile.get_node_or_null("Mushroom") == null \
-			and tile.has_mycelium \
-			and not tile.is_enemy_mycelium:
-		if spore_ui.has_spores():
-			spore_ui.use_spore()
-			var mushroom = mushroom_scene.instantiate()
-			mushroom.name = "Mushroom"
-			mushroom.position = tile.get_global_position() + Vector2(0, 1)
-			entity_layer.add_child(mushroom)
-			if not spore_ui.has_spores():
-				turn_manager.start_enemy_turn()
-		else:
-			tile.flash_invalid()
+
+	if not spore_ui.has_spores():
+		tile.flash_invalid()
+		return
+
+	var mushroom = current_mushroom_scene.instantiate()
+	var is_valid = false
+
+	# --- Front-lines mushrooms (e.g. Cordyceps) ---
+	if mushroom.is_front_lines:
+		is_valid = tile.is_dual_mycelium and not tile.is_occupied
+
+	# --- Normal mushrooms ---
+	else:
+		is_valid = (
+			tile.has_mycelium
+			and not tile.is_enemy_mycelium
+			and not tile.is_dual_mycelium
+			and not tile.is_occupied
+		)
+
+	if is_valid:
+		mushroom.name = "Mushroom"
+		mushroom.position = tile.global_position + Vector2(0, 1)
+		entity_layer.add_child(mushroom)
+
+		tile.is_occupied = true
+		spore_ui.use_spore()
+
+		# Spread if trumpet mushroom
+		if mushroom.is_trumpet:
+			spread_mycelium_around(tile.q, tile.r, false)
+
+		# End turn if out of spores
+		if not spore_ui.has_spores():
+			turn_manager.start_enemy_turn()
+	else:
+		tile.flash_invalid()
 
 var dragging = false
 var last_mouse_pos = Vector2.ZERO
@@ -252,3 +291,15 @@ func _unhandled_input(event):
 		var delta = current_mouse_pos - last_mouse_pos
 		$Camera2D.position = $Camera2D.position.lerp($Camera2D.position - delta, 0.5)  # move opposite to mouse drag
 		last_mouse_pos = current_mouse_pos
+
+func can_place_mushroom_on(tile) -> bool:
+	return tile.get_node_or_null("Mushroom") == null \
+		and tile.has_mycelium \
+		and not tile.is_enemy_mycelium \
+		and not tile.is_dual_mycelium \
+		and not tile.is_occupied
+
+func spread_mycelium_around(q: int, r: int, is_enemy: bool):
+	var neighbors = get_hex_ring(q, r, 1)
+	for neighbor in neighbors:
+		neighbor.set_mycelium_active(true, is_enemy)

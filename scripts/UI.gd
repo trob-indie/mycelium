@@ -1,6 +1,6 @@
 extends CanvasLayer
 
-@export var spores_per_turn: int = 5
+@export var spores_per_turn: int = 3
 var current_spores: int = 0
 
 @onready var spore_container = $SporeContainer

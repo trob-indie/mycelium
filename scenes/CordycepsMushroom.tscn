@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3 uid="uid://bwls3tkm7wt77"]
+
+[ext_resource type="Script" path="res://scripts/Mushroom.gd" id="1_gvsrj"]
+[ext_resource type="Texture2D" uid="uid://brqtsu635m6vd" path="res://sprites/cordyceps-mushroom.png" id="2_xbu6k"]
+
+[node name="Mushroom" type="Node2D"]
+script = ExtResource("1_gvsrj")
+is_trumpet = false
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(0, -23)
+texture = ExtResource("2_xbu6k")
