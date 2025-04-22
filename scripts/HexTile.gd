@@ -7,7 +7,7 @@ extends Area2D
 
 var selected = false
 var hovered = false
-var is_flashing_invalid = false  # ✅ new flag
+var is_flashing_invalid = false
 
 var friendly_shader := preload("res://materials/Mycelium.tres")
 var enemy_shader := preload("res://materials/EnemyMycelium.tres")
@@ -17,6 +17,11 @@ var has_mycelium = false
 var is_enemy_mycelium = false
 var is_occupied: bool = false
 var is_dual_mycelium = false 
+var occupying_mushroom: Node = null
+
+var is_tree: bool = false
+var tree_health: int = 100
+var tree_node: Node = null  # Optional reference to the BaseTree scene
 
 signal mouse_entered_tile
 signal mouse_exited_tile
@@ -68,29 +73,42 @@ func _update_visual():
 		else:
 			$Sprite2D.modulate = Color(1, 1, 1)
 
-func set_mycelium_active(active: bool, is_enemy: bool = false) -> void:
-	if not active:
-		return  # Skip deactivation for now
-
-	if has_mycelium:
-		# Mycelium already exists — check for overlap
-		if is_enemy_mycelium != is_enemy and not is_dual_mycelium:
-			is_dual_mycelium = true
-			var dual_material = preload("res://materials/DualMycelium.tres")
-			$Sprite2D.material = dual_material.duplicate()
-		return  # Already claimed — no further action needed
-
-	# First-time mycelium activation
-	has_mycelium = true
+func set_mycelium_active(active: bool, is_enemy: bool = false, is_dual: bool = false) -> void:
+	has_mycelium = active
 	is_enemy_mycelium = is_enemy
+	is_dual_mycelium = is_dual
+	_update_shader()
 
-	var chosen_material: ShaderMaterial = null
-	if is_enemy:
-		chosen_material = preload("res://materials/EnemyMycelium.tres")
+func _update_shader():
+	if not has_mycelium:
+		$Sprite2D.material = null
+		return
+
+	var chosen_material: ShaderMaterial
+	if is_dual_mycelium:
+		chosen_material = dual_shader
+	elif is_enemy_mycelium:
+		chosen_material = enemy_shader
 	else:
-		chosen_material = preload("res://materials/Mycelium.tres")
+		chosen_material = friendly_shader
 
 	$Sprite2D.material = chosen_material.duplicate()
+
+func disable_mushroom():
+	if occupying_mushroom and occupying_mushroom.has_method("set_disabled"):
+		occupying_mushroom.set_disabled(true)
+		if occupying_mushroom.has_node("Sprite2D") and occupying_mushroom.get_node("Sprite2D").material:
+			var mat = occupying_mushroom.get_node("Sprite2D").material.duplicate()
+			mat.set_shader_parameter("disabled_overlay", true)
+			occupying_mushroom.get_node("Sprite2D").material = mat
+
+func enable_mushroom():
+	if occupying_mushroom and occupying_mushroom.has_method("set_disabled"):
+		occupying_mushroom.set_disabled(false)
+		if occupying_mushroom.has_node("Sprite2D") and occupying_mushroom.get_node("Sprite2D").material:
+			var mat = occupying_mushroom.get_node("Sprite2D").material.duplicate()
+			mat.set_shader_parameter("disabled_overlay", false)
+			occupying_mushroom.get_node("Sprite2D").material = mat
 
 func flash_invalid():
 	var prev_hovered = hovered

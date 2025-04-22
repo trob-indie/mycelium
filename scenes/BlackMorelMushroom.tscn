@@ -1,0 +1,14 @@
+[gd_scene load_steps=4 format=3 uid="uid://bknyasq1vphd2"]
+
+[ext_resource type="Script" path="res://scripts/Mushroom.gd" id="1_tgfgm"]
+[ext_resource type="Material" uid="uid://c6g6jrialkb0r" path="res://materials/MushroomDisabled.tres" id="2_1vobg"]
+[ext_resource type="Texture2D" uid="uid://hcinkj25innw" path="res://sprites/black-morel-mushroom.png" id="3_jw8jk"]
+
+[node name="Mushroom" type="Node2D"]
+script = ExtResource("1_tgfgm")
+is_siege = true
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+material = ExtResource("2_1vobg")
+position = Vector2(0, -23)
+texture = ExtResource("3_jw8jk")

@@ -1,7 +1,8 @@
 extends Node2D
 
 @export var hex_tile_scene: PackedScene
-@export var current_mushroom_scene: PackedScene
+@export var default_mushroom_scene: PackedScene
+var current_mushroom_scene: PackedScene
 @export var base_tree_scene: PackedScene
 
 @onready var entity_layer = $EntityLayer
@@ -19,7 +20,8 @@ var end_base_coords: Vector2
 var hovered_tile: Node = null
 
 func _ready():
-	generate_path_with_bases(50, 1, 4)
+	generate_path_with_bases(10, 1, 4)
+	current_mushroom_scene = default_mushroom_scene
 
 func _process(_delta: float) -> void:
 	var mouse_pos = get_global_mouse_position()
@@ -109,14 +111,14 @@ func _place_base_tree(q: int, r: int) -> void:
 
 	var tree = base_tree_scene.instantiate()
 	tree.position = pos
-	# Let Y-sorting handle draw order — no z_index needed
-	
-	entity_layer.add_child(tree)  # ✅ Add to Y-sorted node
-	
+	entity_layer.add_child(tree)
+
 	# ✅ Mark the tile with a tree
 	var key = Vector2(q, r)
 	if grid.has(key):
-		grid[key].is_occupied = true
+		grid[key].is_tree = true  # Add this property to HexTile.gd
+		grid[key].tree_health = 100  # Initial health
+		grid[key].tree_node = tree  # Store the actual node if needed
 
 # Widen the path by laying tiles perpendicular to the current step dir
 func _thicken_path(q: int, r: int, dir: Vector2, thickness: int, visited: Dictionary) -> void:
@@ -183,22 +185,29 @@ func _input(event):
 			_unselect_all()
 
 			var mushroom = current_mushroom_scene.instantiate()
+			var is_front_lines = mushroom.has_method("is_front_lines") and mushroom.is_front_lines
+			var is_siege = mushroom.has_method("is_siege") and mushroom.is_siege
 
-			var is_valid = false
+			var is_valid := false
 
-			if mushroom.is_front_lines:
-				# Cordyceps can only be placed on dual-claimed tiles
+			if is_front_lines:
+				# Cordyceps: only on dual tiles
 				is_valid = tile.is_dual_mycelium and not tile.is_occupied
 			else:
-				# Normal mushrooms: only on friendly, non-occupied, non-dual tiles
+				# All others: friendly-only, not occupied
 				is_valid = (
-					tile.get_node_or_null("Mushroom") == null
-					and tile.has_mycelium
+					tile.has_mycelium
 					and not tile.is_enemy_mycelium
-					and not tile.is_dual_mycelium
 					and not tile.is_occupied
 				)
 
+			# Siege restriction
+			if mushroom.is_siege:
+				var tile_coords = Vector2(tile.q, tile.r)
+				var distance = axial_distance(tile_coords, end_base_coords)
+				if distance > 2:
+					is_valid = false
+			
 			if is_valid:
 				tile.set_selected(true)
 				selected_tile = tile
@@ -206,6 +215,12 @@ func _input(event):
 			else:
 				if tile.has_method("flash_invalid"):
 					tile.flash_invalid()
+
+func axial_distance(a: Vector2, b: Vector2) -> int:
+	var dq = abs(a.x - b.x)
+	var dr = abs(a.y - b.y)
+	var ds = abs((-a.x - a.y) - (-b.x - b.y))  # s = -q - r
+	return int((dq + dr + ds) / 2)
 
 func _get_topmost_tile_at_pos(pos: Vector2) -> Node:
 	var top_tile: Node = null
@@ -242,20 +257,31 @@ func on_tile_clicked(tile):
 		return
 
 	var mushroom = current_mushroom_scene.instantiate()
-	var is_valid = false
 
-	# --- Front-lines mushrooms (e.g. Cordyceps) ---
+	var is_valid := false
+
 	if mushroom.is_front_lines:
 		is_valid = tile.is_dual_mycelium and not tile.is_occupied
-
-	# --- Normal mushrooms ---
 	else:
-		is_valid = (
-			tile.has_mycelium
-			and not tile.is_enemy_mycelium
-			and not tile.is_dual_mycelium
-			and not tile.is_occupied
-		)
+		if mushroom.is_trumpet:
+			is_valid = (
+				tile.has_mycelium
+				and not tile.is_enemy_mycelium
+				and not tile.is_occupied
+			)
+		else:
+			is_valid = (
+				tile.has_mycelium
+				and not tile.is_enemy_mycelium
+				and not tile.is_dual_mycelium
+				and not tile.is_occupied
+			)
+
+	if mushroom.is_siege:
+		var enemy_base_pos = grid[end_base_coords].position
+		var dist = tile.position.distance_to(enemy_base_pos)
+		if dist > hex_size * 3:
+			is_valid = false
 
 	if is_valid:
 		mushroom.name = "Mushroom"
@@ -263,13 +289,15 @@ func on_tile_clicked(tile):
 		entity_layer.add_child(mushroom)
 
 		tile.is_occupied = true
+		tile.occupying_mushroom = mushroom
 		spore_ui.use_spore()
 
-		# Spread if trumpet mushroom
-		if mushroom.is_trumpet:
-			spread_mycelium_around(tile.q, tile.r, false)
+		if mushroom.is_cordyceps:
+			convert_neighbors_to_friendly(tile.q, tile.r)
+		elif mushroom.is_trumpet:
+			convert_neighbors_to_dual(tile.q, tile.r)
+			spread_mycelium_around(tile.q, tile.r, false, true)
 
-		# End turn if out of spores
 		if not spore_ui.has_spores():
 			turn_manager.start_enemy_turn()
 	else:
@@ -299,7 +327,60 @@ func can_place_mushroom_on(tile) -> bool:
 		and not tile.is_dual_mycelium \
 		and not tile.is_occupied
 
-func spread_mycelium_around(q: int, r: int, is_enemy: bool):
+func spread_mycelium_around(center_q: int, center_r: int, is_enemy: bool = false, allow_dual: bool = false):
+	var max_radius = 2
+	for radius in range(1, max_radius + 1):
+		var ring = get_hex_ring(center_q, center_r, radius)
+		for tile in ring:
+			if not tile.has_mycelium:
+				tile.set_mycelium_active(true, is_enemy, false)
+			elif allow_dual and is_enemy != tile.is_enemy_mycelium:
+				tile.set_mycelium_active(true, true, true)  # dual
+			# else: do nothing (already our mycelium or dual)
+
+func convert_neighbors_to_friendly(q: int, r: int):
 	var neighbors = get_hex_ring(q, r, 1)
 	for neighbor in neighbors:
-		neighbor.set_mycelium_active(true, is_enemy)
+		if not neighbor.has_mycelium:
+			continue
+		neighbor.set_mycelium_active(true, false)
+
+		# Disable enemy mushrooms on those tiles
+		if neighbor.occupying_mushroom and neighbor.occupying_mushroom.is_in_group("enemy"):
+			neighbor.disable_mushroom()
+
+func convert_neighbors_to_dual(q: int, r: int):
+	for radius in range(1, 3):  # 1 and 2 (2 rings out)
+		var neighbors = get_hex_ring(q, r, radius)
+		for neighbor in neighbors:
+			if not neighbor.has_mycelium:
+				# Set friendly if no mycelium
+				neighbor.set_mycelium_active(true, false, false)
+			elif neighbor.is_enemy_mycelium:
+				# Set to dual if it was enemy
+				neighbor.set_mycelium_active(true, false, true)
+			# else leave it as-is if already friendly
+
+func apply_siege_damage_to_enemy():
+	var base_tile = grid[end_base_coords]
+	var tree = base_tile.tree_node
+
+	for child in entity_layer.get_children():
+		if child.has_method("is_siege_mushroom") and child.is_siege_mushroom() and not child.is_in_group("enemy"):
+			var siege_pos = child.global_position
+			var dist = base_tile.global_position.distance_to(siege_pos)
+			if dist <= hex_size * 3.5:
+				if tree and tree.has_method("take_damage"):
+					tree.take_damage(10)
+
+func apply_siege_damage_to_player():
+	var base_tile = grid[start_base_coords]
+	var tree = base_tile.tree_node
+
+	for child in entity_layer.get_children():
+		if child.has_method("is_siege_mushroom") and child.is_siege_mushroom() and child.is_in_group("enemy"):
+			var siege_pos = child.global_position
+			var dist = base_tile.global_position.distance_to(siege_pos)
+			if dist <= hex_size * 3.5:
+				if tree and tree.has_method("take_damage"):
+					tree.take_damage(10)

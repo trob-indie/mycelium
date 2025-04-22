@@ -1,13 +1,19 @@
-[gd_scene load_steps=3 format=3 uid="uid://byoriyr6ef4d4"]
+[gd_scene load_steps=6 format=3 uid="uid://byoriyr6ef4d4"]
 
 [ext_resource type="Script" path="res://scripts/Mushroom.gd" id="1_fmnd8"]
+[ext_resource type="Shader" path="res://shaders/MushroomDisabled.gdshader" id="1_i2h28"]
 [ext_resource type="Texture2D" uid="uid://dynym68ak31q3" path="res://sprites/mushroom-1.png" id="2_t72ea"]
+[ext_resource type="Material" uid="uid://c6g6jrialkb0r" path="res://materials/MushroomDisabled.tres" id="3_y7cop"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_jx85n"]
+shader = ExtResource("1_i2h28")
+shader_parameter/disabled_overlay = false
 
 [node name="Mushroom" type="Node2D"]
+material = SubResource("ShaderMaterial_jx85n")
 script = ExtResource("1_fmnd8")
-is_trumpet = false
-is_front_lines = false
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
+material = ExtResource("3_y7cop")
 position = Vector2(0, -14)
 texture = ExtResource("2_t72ea")

@@ -3,17 +3,20 @@ extends Node
 enum Turn { PLAYER, ENEMY }
 var current_turn: Turn = Turn.PLAYER
 
+@export var trumpet_mushroom_scene: PackedScene
+@export var basic_mushroom_scene: PackedScene
+@export var cordyceps_mushroom_scene: PackedScene
+
 @export var game_root: NodePath
 @export var spore_ui_path: NodePath
 @export var entity_layer_path: NodePath
-@export var mushroom_scene: PackedScene
 @export var main: Node
 
 var game       : Node
 var spore_ui   : Node
 var entity_layer : Node
 
-var enemy_spore_count := 3
+var enemy_spore_count := 2
 
 func _ready():
 	game = get_node(game_root)
@@ -30,45 +33,91 @@ func start_player_turn():
 	spore_ui.start_turn()
 
 func start_enemy_turn():
-	enemy_spore_count = 3
+	enemy_spore_count = 2
 	await spawn_enemy_mushrooms()
 	await get_tree().create_timer(1.0).timeout
+	main.apply_siege_damage_to_player()
 	start_player_turn()
 
 
 # --- Enemy AI logic ---
 
 func spawn_enemy_mushrooms():
+	var spores_left = enemy_spore_count
 	var candidates: Array = []
 
+	# Step 1: Find all valid tiles (unoccupied enemy mycelium)
 	for tile in main.grid.values():
 		if tile.has_mycelium and tile.is_enemy_mycelium and not tile.is_occupied:
 			candidates.append(tile)
 
-	if candidates.is_empty():
-		return
-
+	# Sort candidates by usefulness (same as before)
 	candidates.sort_custom(func(a, b):
 		return get_directional_enemy_tile_score(a) > get_directional_enemy_tile_score(b)
 	)
 
-	for i in range(enemy_spore_count):
-		if i >= candidates.size():
+	# Step 2: CORDYCEPS — place on dual-mycelium tiles first
+	for tile in candidates:
+		if spores_left <= 0:
 			break
 
-		var tile = candidates[i]
-		var mushroom = mushroom_scene.instantiate()
+		if tile.is_dual_mycelium:
+			var mushroom = cordyceps_mushroom_scene.instantiate()
+			mushroom.add_to_group("enemy")
+			mushroom.name = "EnemyMushroom"
+			mushroom.position = tile.global_position + Vector2(0, 1)
+			tile.occupying_mushroom = mushroom
+			main.entity_layer.add_child(mushroom)
+			
+			if mushroom.is_cordyceps:
+				convert_neighbors_to_enemy(tile.q, tile.r)
+
+			tile.is_occupied = true
+			spores_left -= 1
+
+	# Step 3: TRUMPET — expand enemy mycelium
+	for tile in candidates:
+		if spores_left <= 0:
+			break
+
+		if tile.is_occupied or tile.is_dual_mycelium:
+			continue
+
+		var score = get_directional_enemy_tile_score(tile)
+		if score <= 0:
+			continue
+
+		var mushroom = trumpet_mushroom_scene.instantiate()
+		mushroom.add_to_group("enemy")
 		mushroom.name = "EnemyMushroom"
 		mushroom.position = tile.global_position + Vector2(0, 1)
+		tile.occupying_mushroom = mushroom
 		main.entity_layer.add_child(mushroom)
 
 		tile.is_occupied = true
+		spores_left -= 1
 
-		if mushroom.is_trumpet:
-			var neighbors = main.get_hex_ring(tile.q, tile.r, 1)
-			for neighbor in neighbors:
-				if not neighbor.has_mycelium:
-					neighbor.set_mycelium_active(true, true)
+		# spread from trumpet
+		main.spread_mycelium_around(tile.q, tile.r, true)
+
+	# Step 4: BASIC fallback — only on pure enemy tiles
+	for tile in candidates:
+		if spores_left <= 0:
+			break
+
+		if tile.is_occupied or tile.is_dual_mycelium:
+			continue
+
+		var mushroom = basic_mushroom_scene.instantiate()
+		mushroom.add_to_group("enemy")
+		mushroom.name = "EnemyMushroom"
+		mushroom.position = tile.global_position + Vector2(0, 1)
+		tile.occupying_mushroom = mushroom
+		main.entity_layer.add_child(mushroom)
+
+		tile.is_occupied = true
+		spores_left -= 1
+	main.apply_siege_damage_to_enemy()
 
 func get_directional_enemy_tile_score(tile) -> float:
 	var base_pos = main.grid[main.start_base_coords].global_position
@@ -88,7 +137,7 @@ func get_directional_enemy_tile_score(tile) -> float:
 
 	# Tune these weights to balance spread vs aggression
 	var spread_weight = 10.0
-	var distance_penalty = 0.5
+	var distance_penalty = 0.01
 
 	return potential_new_tiles * spread_weight - to_base_distance * distance_penalty
 
@@ -104,3 +153,13 @@ func get_enemy_tile_score(tile) -> float:
 
 	# Lower distance is better, so we subtract it from a base value
 	return edge_score * 10 - distance * 0.01
+
+func convert_neighbors_to_enemy(q: int, r: int):
+	var neighbors = main.get_hex_ring(q, r, 1)
+	for neighbor in neighbors:
+		if not neighbor.has_mycelium:
+			continue
+		neighbor.set_mycelium_active(true, true)
+
+		if neighbor.occupying_mushroom and not neighbor.occupying_mushroom.is_in_group("enemy"):
+			neighbor.disable_mushroom()
